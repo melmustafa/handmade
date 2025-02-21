@@ -1,5 +1,58 @@
 #include <windows.h>
 
+#define internal static
+#define global_variable static
+#define local_persist static
+
+// NOTE: this is a local (only works in this file) global variable for now
+global_variable bool running;
+global_variable BITMAPINFO bitmapInfo;
+global_variable void* bitmapMemory;
+global_variable HBITMAP bitmapHandle;
+global_variable HDC bitmapDeviceContext;
+
+internal void Win32ResizeDIBSection(int width, int height) {
+  if (bitmapHandle) {
+    DeleteObject(bitmapHandle);
+  }
+
+  if (!bitmapDeviceContext) {
+    bitmapDeviceContext = CreateCompatibleDC(0);
+  }
+
+  bitmapInfo.bmiHeader.biSize = sizeof(bitmapInfo.bmiHeader);
+  bitmapInfo.bmiHeader.biWidth = width;
+  bitmapInfo.bmiHeader.biHeight = height;
+  bitmapInfo.bmiHeader.biPlanes = 1;
+  bitmapInfo.bmiHeader.biBitCount = 32;
+  bitmapInfo.bmiHeader.biCompression = BI_RGB;
+
+  // TODO: check this out again to check for allocation problems
+
+  bitmapHandle = CreateDIBSection(
+      bitmapDeviceContext, &bitmapInfo, DIB_RGB_COLORS, &bitmapMemory, NULL, 0);
+}
+
+internal void Win32UpdateWindow(HDC deviceContext,
+                                int x,
+                                int y,
+                                int width,
+                                int height) {
+  /*StretchDIBits(deviceContext,*/
+  /*              x,*/
+  /*              y,*/
+  /*              width,*/
+  /*              height,*/
+  /*              x,*/
+  /*              y,*/
+  /*              width,*/
+  /*              height,*/
+  /*              [in] const VOID* lpBits,*/
+  /*              [in] const BITMAPINFO* lpbmi,*/
+  /*              DIB_RGB_COLORS,*/
+  /*              SRCCOPY);*/
+}
+
 LRESULT MainWindowCallback(HWND window,
                            UINT message,
                            WPARAM wParam,
@@ -7,14 +60,19 @@ LRESULT MainWindowCallback(HWND window,
   LRESULT result = 0;
 
   switch (message) {
-    case WM_SIZE: {
-      OutputDebugString("WM_SIZE\n");
-    } break;
     case WM_DESTROY: {
-      OutputDebugString("WM_DESTROY\n");
+      // TODO: this might be an error
+      running = false;
     } break;
     case WM_CLOSE: {
-      OutputDebugString("WM_CLOSE\n");
+      // TODO: handle with an interaction with the message
+      running = false;
+    } break;
+    case WM_SIZE: {
+      int width = (short)lParam;
+      int height = (short)(lParam >> 16);
+      Win32ResizeDIBSection(width, height);
+      OutputDebugString("WM_SIZE\n");
     } break;
     case WM_ACTIVATE: {
       OutputDebugString("WM_ACTIVATE\n");
@@ -22,19 +80,11 @@ LRESULT MainWindowCallback(HWND window,
     case WM_PAINT: {
       PAINTSTRUCT paint;
       HDC deviceContext = BeginPaint(window, &paint);
-
       int x = paint.rcPaint.left;
       int y = paint.rcPaint.top;
       int height = paint.rcPaint.bottom - paint.rcPaint.top;
       int width = paint.rcPaint.right - paint.rcPaint.left;
-      static DWORD operation = WHITENESS;
-      if (operation == WHITENESS) {
-        operation = BLACKNESS;
-      } else {
-        operation = WHITENESS;
-      }
-      PatBlt(deviceContext, x, y, width, height, operation);
-
+      Win32UpdateWindow(deviceContext, x, y, height, width);
       EndPaint(window, &paint);
     } break;
     default: {
@@ -59,14 +109,23 @@ int WinMain(HINSTANCE instance,
   windowClass.lpszClassName = "HandmadeHeroWindowClass";
 
   if (RegisterClass(&windowClass)) {
-    HWND windowHandle = CreateWindowExA(
-        0, windowClass.lpszClassName, "Handmade Hero",
-        WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
-        CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, instance, 0);
+    HWND windowHandle = CreateWindowExA(0,
+                                        windowClass.lpszClassName,
+                                        "Handmade Hero",
+                                        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                                        CW_USEDEFAULT,
+                                        CW_USEDEFAULT,
+                                        CW_USEDEFAULT,
+                                        CW_USEDEFAULT,
+                                        0,
+                                        0,
+                                        instance,
+                                        0);
 
     if (windowHandle != NULL) {
+      running = true;
       MSG message;
-      for (;;) {
+      while (running) {
         BOOL messageResult = GetMessageA(&message, 0, 0, 0);
         if (messageResult > 0) {
           TranslateMessage(&message);
