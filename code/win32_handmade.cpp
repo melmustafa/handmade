@@ -59,7 +59,7 @@ int WinMain(HINSTANCE instance,
   windowClass.lpszClassName = "HandmadeHeroWindowClass";
 
   if (RegisterClass(&windowClass)) {
-    HWND windowHandle = CreateWindowEx(
+    HWND windowHandle = CreateWindowExA(
         0, windowClass.lpszClassName, "Handmade Hero",
         WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
         CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, instance, 0);
@@ -67,7 +67,7 @@ int WinMain(HINSTANCE instance,
     if (windowHandle != NULL) {
       MSG message;
       for (;;) {
-        BOOL messageResult = GetMessage(&message, 0, 0, 0);
+        BOOL messageResult = GetMessageA(&message, 0, 0, 0);
         if (messageResult > 0) {
           TranslateMessage(&message);
           DispatchMessage(&message);
