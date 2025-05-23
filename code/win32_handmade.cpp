@@ -32,8 +32,8 @@ struct win32_window_dimension {
 };
 
 // TODO: this is global for now
-global_variable bool running;
-global_variable win32_offscreen_buffer back_buffer;
+global_variable bool global_running;
+global_variable win32_offscreen_buffer global_back_buffer;
 
 win32_window_dimension Win32GetWindowDimension(HWND window) {
   win32_window_dimension result;
@@ -46,15 +46,12 @@ win32_window_dimension Win32GetWindowDimension(HWND window) {
   return result;
 }
 
-internal void RenderWeirdGradient(win32_offscreen_buffer buffer,
-                                  int x_offset,
-                                  int y_offset) {
+internal void RenderWeirdGradient(win32_offscreen_buffer buffer, int x_offset, int y_offset) {
   uint8* row = (uint8*)buffer.memory;
   for (int y = 0; y < buffer.height; ++y) {
     uint32* pixel = (uint32*)row;
     for (int x = 0; x < buffer.width; ++x) {
-      *pixel = ((x * 255 / buffer.width) + x_offset) |
-               (((y * 255 / buffer.height) + y_offset) << 8);
+      *pixel = ((x * 255 / buffer.width) + x_offset) | (((y * 255 / buffer.height) + y_offset) << 8);
 
       pixel++;
     }
@@ -62,9 +59,7 @@ internal void RenderWeirdGradient(win32_offscreen_buffer buffer,
   }
 }
 
-internal void Win32ResizeDIBSection(win32_offscreen_buffer* buffer,
-                                    int width,
-                                    int height) {
+internal void Win32ResizeDIBSection(win32_offscreen_buffer* buffer, int width, int height) {
   if (buffer->memory) {
     VirtualFree(buffer->memory, 0, MEM_RELEASE);
   }
@@ -90,6 +85,7 @@ internal void Win32DisplayWindow(HDC deviceContext,
                                  win32_offscreen_buffer buffer,
                                  int window_width,
                                  int window_height) {
+  // TODO: check other possible stretch modes
   StretchDIBits(deviceContext,
                 0,
                 0,
@@ -110,39 +106,32 @@ LRESULT MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lPar
 
   switch (message) {
     case WM_DESTROY: {
+      OutputDebugString("WM_DESTROY\n");
       // TODO: this might be an error
-      running = false;
+      global_running = false;
     } break;
     case WM_CLOSE: {
-      // TODO: handle with an interaction with the message
-      running = false;
+      OutputDebugString("WM_CLOSE\n");
+      // TODO: handle the interaction with the message
+      global_running = false;
     } break;
     case WM_SIZE: {
-      // TODO: casey is using client rect check the performance penalty for this
-      // RECT clientRect;
-      // GetClientRect(window, &clientRect);
-
-      // int width = (short)lParam;
-      // int height = (short)(lParam >> 16);
-      // Win32ResizeDIBSection(&back_buffer, width, height);
       OutputDebugString("WM_SIZE\n");
+      // TODO: casey is using client rect check the performance penalty for this
+      // NOTE: stop resizing and only allow prespecified sizes from inside the game loop
     } break;
     case WM_ACTIVATE: {
       OutputDebugString("WM_ACTIVATE\n");
     } break;
     case WM_PAINT: {
+      OutputDebugString("WM_PAINT\n");
       PAINTSTRUCT paint;
       HDC deviceContext = BeginPaint(window, &paint);
-      int x = paint.rcPaint.left;
-      int y = paint.rcPaint.top;
-      int height = paint.rcPaint.bottom - paint.rcPaint.top;
-      int width = paint.rcPaint.right - paint.rcPaint.left;
 
       win32_window_dimension dimension = Win32GetWindowDimension(window);
+      RenderWeirdGradient(global_back_buffer, 0, 0);
+      Win32DisplayWindow(deviceContext, global_back_buffer, dimension.width, dimension.height);
 
-      RenderWeirdGradient(back_buffer, 0, 0);
-
-      Win32DisplayWindow(deviceContext, back_buffer, dimension.width, dimension.height);
       EndPaint(window, &paint);
     } break;
     default: {
@@ -155,10 +144,10 @@ LRESULT MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lPar
 }
 
 int WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR cmdLine, int showCmd) {
-  Win32ResizeDIBSection(&back_buffer, 1280, 720);
+  Win32ResizeDIBSection(&global_back_buffer, 1280, 720);
 
   WNDCLASS windowClass = {};
-  windowClass.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
+  windowClass.style = CS_HREDRAW | CS_VREDRAW;
   windowClass.lpfnWndProc = MainWindowCallback;
   windowClass.hInstance = instance;
   // window.hIcon;
@@ -177,28 +166,25 @@ int WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR cmdLine, int showC
                                   0,
                                   instance,
                                   0);
-
     if (window) {
       int x_offset = 0;
       int y_offset = 0;
 
-      running = true;
-      while (running) {
+      global_running = true;
+      while (global_running) {
         MSG message;
         while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
           if (message.message == WM_QUIT) {
-            running = false;
+            global_running = false;
           }
-
           TranslateMessage(&message);
           DispatchMessage(&message);
         }
-        RenderWeirdGradient(back_buffer, x_offset, y_offset);
+        RenderWeirdGradient(global_back_buffer, x_offset, y_offset);
 
         HDC deviceContext = GetDC(window);
         win32_window_dimension dimension = Win32GetWindowDimension(window);
-        Win32DisplayWindow(
-            deviceContext, back_buffer, dimension.width, dimension.height);
+        Win32DisplayWindow(deviceContext, global_back_buffer, dimension.width, dimension.height);
         ReleaseDC(window, deviceContext);
 
         x_offset++;
@@ -207,7 +193,8 @@ int WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR cmdLine, int showC
     } else {
       // TODO: logging
     }
-  } else {  // TODO: logging
+  } else {
+    // TODO: logging
   }
   return 0;
 }
